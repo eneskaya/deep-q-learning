@@ -12,6 +12,17 @@ import wandb
 from wandb.keras import WandbCallback
 wandb.init(project="is-deep-q")
 
+config = wandb.config
+config.activation_f_output_layer = 'linear'
+config.activation_f_hidden_layer = 'relu'
+config.game = 'CartPole-v1'
+config.batch_size = 32
+config.gamma = 0.95
+config.epsilon = 1.0
+config.epsilon_min = 0.01
+config.epsilon_decay = 0.995
+config.learning_rate = 0.001
+
 EPISODES = 100
 
 
@@ -20,25 +31,23 @@ class DQNAgent:
         self.state_size = state_size
         self.action_size = action_size
         self.memory = deque(maxlen=2000)
-        self.gamma = 0.95    # discount rate
-        self.epsilon = 1.0  # exploration rate
-        self.epsilon_min = 0.01
-        self.epsilon_decay = 0.995
-        self.learning_rate = 0.001
+
+        self.gamma = config.gamma    # discount rate
+        self.epsilon = config.epsilon  # exploration rate
+        self.epsilon_min = config.epsilon_min
+        self.epsilon_decay = config.epsilon_decay
+        self.learning_rate = config.learning_rate
+
         self.model = self._build_model()
 
     def _build_model(self):
-        activation_f_output_layer = 'linear'
-        activation_f_hidden_layer = 'sigmoid'
-
-        wandb.config.activation_f_output_layer = activation_f_output_layer
-        wandb.config.activation_f_hidden_layer = activation_f_hidden_layer
-
         # Neural Net for Deep-Q learning Model
         model = Sequential()
-        model.add(Dense(24, input_dim=self.state_size, activation=activation_f_hidden_layer))
-        model.add(Dense(24, activation=activation_f_hidden_layer))
-        model.add(Dense(self.action_size, activation=activation_f_output_layer))
+        model.add(Dense(24, input_dim=self.state_size,
+                        activation=config.activation_f_hidden_layer))
+        model.add(Dense(24, activation=config.activation_f_hidden_layer))
+        model.add(Dense(self.action_size,
+                        activation=config.activation_f_output_layer))
         model.compile(loss='mse',
                       optimizer=Adam(lr=self.learning_rate))
         return model
@@ -52,6 +61,12 @@ class DQNAgent:
         act_values = self.model.predict(state)
         return np.argmax(act_values[0])  # returns action
 
+    '''
+        Hier findet das Training statt.
+        
+        Im 'minibatch' werden aus dem memory des Agenten eine bestimmte Menge (batch_size)
+        an (s, a, r, n_s, done) Tupeln entnommen. Für jedes Tupel wird nun folgender Algorithmus angewendet:
+    '''
     def replay(self, batch_size):
         minibatch = random.sample(self.memory, batch_size)
         for state, action, reward, next_state, done in minibatch:
@@ -81,17 +96,7 @@ if __name__ == "__main__":
     agent = DQNAgent(state_size, action_size)
     # agent.load("./save/cartpole-dqn.h5")
     done = False
-    batch_size = 32
-
-    wandb.config.game = game
-    wandb.config.batch_size = batch_size
-    wandb.config.state_size = state_size
-    wandb.config.action_size = action_size
-    wandb.config.gamma = agent.gamma
-    wandb.config.epsilon = agent.epsilon
-    wandb.config.epsilon_min = agent.epsilon_min
-    wandb.config.epsilon_decay = agent.epsilon_decay
-    wandb.config.learning_rate = agent.learning_rate
+    batch_size = config.batch_size
 
     for e in range(EPISODES):
         state = env.reset()
