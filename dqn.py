@@ -14,7 +14,7 @@ wandb.init(project="is-deep-q")
 
 config = wandb.config
 config.activation_f_output_layer = 'linear'
-config.activation_f_hidden_layer = 'relu'
+config.activation_f_hidden_layer = 'sigmoid'
 config.game = 'CartPole-v1'
 config.batch_size = 32
 config.gamma = 0.95
@@ -27,6 +27,23 @@ EPISODES = 100
 
 
 class DQNAgent:
+    '''
+        Der DQN Agent wird initialisiert mit:
+            - state_size
+            - action_size
+            - memory:
+                Für den Memory Replay Mechanismus (siehe DQN Paper von Deepmind)
+                deque steht für "double-ended queue", siehe https://docs.python.org/2/library/collections.html#collections.deque
+                    Deques support thread-safe, memory efficient appends and pops from either 
+                    side of the deque with approximately the same O(1) performance in either direction.
+            - gamma:
+                Discount Rate oder Discount Factor,
+                    Faktor 0 würde bedeuten, dass der Agent "kurzsichtig handelt", sprich zukünftige Belohnungen
+                    werden nicht mehr betrachtet, nur die aktuelle Belohnung.
+                    Faktor 1 würde bedeuten
+
+    '''
+
     def __init__(self, state_size, action_size):
         self.state_size = state_size
         self.action_size = action_size
@@ -67,6 +84,7 @@ class DQNAgent:
         Im 'minibatch' werden aus dem memory des Agenten eine bestimmte Menge (batch_size)
         an (s, a, r, n_s, done) Tupeln entnommen. Für jedes Tupel wird nun folgender Algorithmus angewendet:
     '''
+
     def replay(self, batch_size):
         minibatch = random.sample(self.memory, batch_size)
         for state, action, reward, next_state, done in minibatch:
