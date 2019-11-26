@@ -89,3 +89,6 @@ ENV/
 .ropeproject
 
 .vscode/
+
+dqn/
+wandb/
