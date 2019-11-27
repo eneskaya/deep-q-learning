@@ -21,16 +21,46 @@ config.gamma = 0.95
 config.epsilon = 1.0
 config.epsilon_min = 0.01
 config.epsilon_decay = 0.995
-config.learning_rate = 0.001
+config.learning_rate = 0.002
 
 EPISODES = 100
 
 
 class DQNAgent:
     '''
+        CartPole-v1 Env (https://github.com/openai/gym/blob/master/gym/envs/classic_control/cartpole.py):
+
+            Observation (State): 
+                Type: Box(4)
+                Num	Observation                 Min         Max
+                0	Cart Position             -4.8            4.8
+                1	Cart Velocity             -Inf            Inf
+                2	Pole Angle                 -24 deg        24 deg
+                3	Pole Velocity At Tip      -Inf            Inf
+
+            Actions:
+                Type: Discrete(2)
+                Num	Action
+                0	Push cart to the left
+                1	Push cart to the right
+
+            Reward:
+                Reward is 1 for every step taken, including the termination step
+            Starting State:
+                All observations are assigned a uniform random value in [-0.05..0.05]
+            Episode Termination:
+                Pole Angle is more than 12 degrees
+                Cart Position is more than 2.4 (center of the cart reaches the edge of the display)
+                Episode length is greater than 200
+                Solved Requirements
+                Considered solved when the average reward is greater than or equal to 195.0 over 100 consecutive trials.
+
+
         Der DQN Agent wird initialisiert mit:
             - state_size
             - action_size
+
+        Hyperparameter:
             - memory:
                 Für den Memory Replay Mechanismus (siehe DQN Paper von Deepmind)
                 deque steht für "double-ended queue", siehe https://docs.python.org/2/library/collections.html#collections.deque
@@ -41,7 +71,12 @@ class DQNAgent:
                     Faktor 0 würde bedeuten, dass der Agent "kurzsichtig handelt", sprich zukünftige Belohnungen
                     werden nicht mehr betrachtet, nur die aktuelle Belohnung.
                     Faktor 1 würde bedeuten
-
+            - epsilon:
+                Die Explorations Rate, je höher, desto mehr wird "ausprobiert", also random actions
+            - epsilon_min:
+                Wir wollen eine Mindest-Exploration gewährleisten
+            - epsilon_decay:
+                Der Wert, um den der epsilon in jedem Timestep verfällt
     '''
 
     def __init__(self, state_size, action_size):
@@ -60,11 +95,17 @@ class DQNAgent:
     def _build_model(self):
         # Neural Net for Deep-Q learning Model
         model = Sequential()
+
+        # Input layer
         model.add(Dense(24, input_dim=self.state_size,
                         activation=config.activation_f_hidden_layer))
+        # Hidden layer 1
         model.add(Dense(24, activation=config.activation_f_hidden_layer))
+
+        # Output layer
         model.add(Dense(self.action_size,
                         activation=config.activation_f_output_layer))
+
         model.compile(loss='mse',
                       optimizer=Adam(lr=self.learning_rate))
         return model
@@ -73,8 +114,10 @@ class DQNAgent:
         self.memory.append((state, action, reward, next_state, done))
 
     def act(self, state):
+        # Exploring
         if np.random.rand() <= self.epsilon:
             return random.randrange(self.action_size)
+        # Exploiting
         act_values = self.model.predict(state)
         return np.argmax(act_values[0])  # returns action
 
@@ -83,6 +126,21 @@ class DQNAgent:
         
         Im 'minibatch' werden aus dem memory des Agenten eine bestimmte Menge (batch_size)
         an (s, a, r, n_s, done) Tupeln entnommen. Für jedes Tupel wird nun folgender Algorithmus angewendet:
+
+            Falls kein Terminal State, berechne target für gegebenen 
+                target = 
+                    reward 
+                        +
+                            gamma (discount rate, Wie hoch soll der zeR gewichtet werden) 
+                                * 
+                                    maximal erwartete, zukünftige (next_state) Q-Wert (Action-Value)
+
+            Setze target_f als prediction für den aktuellen state
+            Und aktualisiere für gegebene (next_state, action) den Wert in target_f
+
+            Benutze state als input und target_f als target für unser DQN, starte training (fit)
+
+            Falls epsilon noch über Schwellenwert, reduziere auf neuen Wert (*epsilon_decay)
     '''
 
     def replay(self, batch_size):
@@ -92,8 +150,11 @@ class DQNAgent:
             if not done:
                 target = (reward + self.gamma *
                           np.amax(self.model.predict(next_state)[0]))
+
             target_f = self.model.predict(state)
+            # print("predicted", target_f)
             target_f[0][action] = target
+            # print("expected future reward", target_f)
             self.model.fit(state, target_f, epochs=1, verbose=0,
                            callbacks=[WandbCallback()])
         if self.epsilon > self.epsilon_min:
@@ -112,7 +173,7 @@ if __name__ == "__main__":
     state_size = env.observation_space.shape[0]
     action_size = env.action_space.n
     agent = DQNAgent(state_size, action_size)
-    # agent.load("./save/cartpole-dqn.h5")
+    # agent.load(wandb.restore("cartpole-dqn-wandb.h5").name)
     done = False
     batch_size = config.batch_size
 
