@@ -7,6 +7,7 @@ from collections import deque
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.optimizers import Adam
+from keras.optimizers import SGD
 
 import wandb
 from wandb.keras import WandbCallback
@@ -106,8 +107,17 @@ class DQNAgent:
         model.add(Dense(self.action_size,
                         activation=config.activation_f_output_layer))
 
+        optimizer = Adam(lr=self.learning_rate)
+        wandb.config.optimizer = 'adam'
+
+        # optimizer = RMSProp(lr=self.learning_rate)
+        # wandb.config.optimizer = 'rmsprop'
+
+        # optimizer = SGD(lr=self.learning_rate)
+        # wandb.config.optimizer = 'sgd'
+
         model.compile(loss='mse',
-                      optimizer=Adam(lr=self.learning_rate))
+                      optimizer=optimizer)
         return model
 
     def remember(self, state, action, reward, next_state, done):
@@ -126,7 +136,9 @@ class DQNAgent:
         
         Im 'minibatch' werden aus dem memory des Agenten eine bestimmte Menge (batch_size)
         an (s, a, r, n_s, done) Tupeln entnommen. Für jedes Tupel wird nun folgender Algorithmus angewendet:
-
+            
+            ...
+            
             Falls kein Terminal State, berechne target für gegebenen 
                 target = 
                     reward 
@@ -140,16 +152,18 @@ class DQNAgent:
 
             Benutze state als input und target_f als target für unser DQN, starte training (fit)
 
-            Falls epsilon noch über Schwellenwert, reduziere auf neuen Wert (*epsilon_decay)
+            Falls epsilon noch über Schwellenwert, reduziere auf neuen Wert (epsilon * epsilon_decay)
     '''
 
-    def replay(self, batch_size):
+    def replay(self, batch_size, e):
         minibatch = random.sample(self.memory, batch_size)
         for state, action, reward, next_state, done in minibatch:
             target = reward
             if not done:
                 target = (reward + self.gamma *
                           np.amax(self.model.predict(next_state)[0]))
+                # Expected max. future reward
+                wandb.log({'q_val': target, 'episode': e})
 
             target_f = self.model.predict(state)
             # print("predicted", target_f)
@@ -196,7 +210,7 @@ if __name__ == "__main__":
                       .format(e, EPISODES, time, agent.epsilon))
                 break
             if len(agent.memory) > batch_size:
-                agent.replay(batch_size)
+                agent.replay(batch_size, e)
         # if e % 10 == 0:
         #     agent.save(os.path.join(wandb.run.dir,
         #                             "cartpole-dqn-wandb.h5"))
